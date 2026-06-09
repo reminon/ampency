@@ -1,0 +1,47 @@
+# ISOs and disc images
+iso/
+*.iso
+*.bin
+*.cue
+*.img
+
+# All extracted game assets
+extracted/
+extracted_rnds/
+ARK/
+
+# Ghidra project
+ghidra_project/
+
+# Build artifacts
+target/
+*.o
+*.a
+bin/
+obj/
+
+# Java/compiled
+*.class
+*.jar
+*.zip
+*.dll
+*.pdb
+*.deps.json
+*.runtimeconfig.json
+
+# Logs and indices
+*.log
+*.idx
+index.log
+save.log
+
+# Cloned third-party tools
+tools/GameArchives/
+tools/themethod3/
+tools/dtab/
+tools/jpsxdec*/
+tools/ArkExtract/bin/
+tools/ArkExtract/obj/
+
+# Temp
+ee_ext/
