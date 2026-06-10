@@ -303,3 +303,128 @@ analyzeHeadless ~/project AmplitudePS2 \
   -import SCUS_972.58 \
   -processor "r5900:LE:32:default"
 ```
+
+---
+
+## DTB / DTA Script Format
+
+Amplitude uses compiled binary DTA (`.txt.bin`) files in place of Frequency's
+Python scripts. These are Harmonix's cross-game data format, also used in
+Guitar Hero and Rock Band.
+
+### File Structure
+
+```
+[0x00] u8  version        = 0x02
+[0x01] u32 num_files      = 1 (always 1 in Amplitude)
+[0x05] u32 filename_len
+[0x09] u8[filename_len]   source .txt filename (e.g. "arenas/factory/triggers_p1.txt")
+[0x09+filename_len] DTA tree
+```
+
+### DTA Tree Structure
+
+```
+u16 child_count
+u32 node_id
+[variable] node ID lookup table (filled with 0xFFFFFFFF sentinels, variable length)
+[child_count x] DTA chunks
+```
+
+The node ID lookup table between the tree header and chunk data has variable
+length. Its end is not explicitly marked — parsers must find the start of valid
+chunk data empirically.
+
+### DTA Chunk Encoding
+
+Each chunk is encoded as a u32 type tag followed by type-specific data:
+
+| Type ID | Name | Data |
+|---------|------|------|
+| `0x00` | Int | u32 value (signed) |
+| `0x01` | Float | f32 value |
+| `0x02` | Var | u32 len + bytes |
+| `0x05` | Symbol | u32 len + bytes |
+| `0x06` | Unhandled | u32 (skip 4 bytes) |
+| `0x07` | IfDef | u32 len + bytes |
+| `0x08` | Else | u32 (skip 4 bytes) |
+| `0x09` | EndIf | u32 (skip 4 bytes) |
+| `0x10` | Parens `()` | DTA tree (array) |
+| `0x11` | Braces `{}` | DTA tree |
+| `0x12` | String | u32 len + bytes |
+| `0x13` | Brackets `[]` | DTA tree |
+| `0x20` | Define | u32 len + bytes |
+| `0x21` | Include | u32 len + bytes |
+| `0x22` | Merge | u32 len + bytes |
+| `0x23` | IfNDef | u32 len + bytes |
+| `0x24` | Autorun | u32 (skip 4 bytes) |
+| `0x25` | Undef | u32 len + bytes |
+
+All strings are NOT null-terminated. They use a u32 length prefix with raw bytes.
+
+### Trigger Script Format
+
+The `triggers_*.txt.bin` files per arena/phase are event scripts that control
+health-reactive animations and game events. They replace Frequency's Python
+scripts with compiled DTA.
+
+Each trigger entry is a `()` array containing:
+
+```scheme
+(
+  beat <float>              ; beat position in song
+  conditions
+    (not <condition>)       ; optional condition
+  actions
+    (animate <rnd_object> <float>)   ; play animation at speed
+    (set_mat <material> ...)         ; set material properties
+    (begin ...)             ; sequential action block
+)
+```
+
+Example decoded from `arenas/factory/gen/triggers_p1.txt.bin`:
+```scheme
+(beat 0.0
+  (conditions (not note))
+  (actions
+    (animate "harvester_mouth_01.tnm" 720.0)
+    (animate "harvester_mouth_02.tnm" 720.0)))
+(beat 61.0
+  (conditions (begin))
+  (actions
+    (animate "World_beat.view" ...)
+    (set_mat "harvester_room.mat"
+      (base_color 0.4 0.4 0.6))))
+```
+
+### Files of Interest
+
+| File | Size | Description |
+|------|------|-------------|
+| `gen/freq2_config.txt.bin` | 376 KB | Main game configuration |
+| `gen/default_config.txt.bin` | 81 KB | Default settings |
+| `gen/english_songs.txt.bin` | 20 KB | Song metadata (names, artists, credits) |
+| `gen/english_messages.txt.bin` | 88 KB | UI strings |
+| `gen/english_screens.txt.bin` | 52 KB | Screen text |
+| `arenas/*/gen/triggers_*.txt.bin` | 3-11 KB | Per-phase event scripts |
+| `gen/version.txt.bin` | 54 bytes | Build version (`Build: 210203RC4`) |
+
+### Relationship to Frequency Python Scripts
+
+Frequency used Python scripts (e.g. `blue.py`) with a custom `hx` module API:
+```python
+hx.anim_speed("boundary flash", health * 2.0)
+```
+
+Amplitude replaced these with compiled DTA trigger scripts that express the same
+concepts (beat-triggered actions, health-reactive animations) in a platform-
+independent binary format. The trigger system is functionally equivalent but
+compiled rather than interpreted.
+
+### DTB Encryption
+
+Standard DTB files (Guitar Hero, Rock Band) are XOR-encrypted using a 4-byte
+key stored at the start of the file. Amplitude's `.txt.bin` files appear to use
+an unencrypted variant — the source filename is visible in plaintext immediately
+after the version byte, and known strings (`beat`, `conditions`, `actions`,
+`animate`) are readable without decryption.
