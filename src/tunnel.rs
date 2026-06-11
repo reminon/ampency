@@ -17,12 +17,12 @@ const RING_COUNT: usize = 50;
 pub mod palette {
     // Lane colors left to right
         pub const LANES: [[f32; 3]; 6] = [
-        [0.85, 0.06, 0.06], // Lane 1 - Red
-        [0.1,  0.35, 0.95], // Lane 2 - Blue
-        [0.1,  0.85, 0.15], // Lane 3 - Green
-        [0.95, 0.85, 0.05], // Lane 4 - Yellow
-        [0.95, 0.45, 0.05], // Lane 5 - Orange
-        [0.85, 0.06, 0.06], // Lane 6 - Red
+        [0.550, 0.000, 0.000], // Lane 1 - Red    (Drum bg)
+        [0.000, 0.200, 0.650], // Lane 2 - Blue   (Bass bg)
+        [0.000, 0.550, 0.000], // Lane 3 - Green  (Vocal bg)
+        [0.700, 0.600, 0.000], // Lane 4 - Yellow (Synth bg)
+        [0.800, 0.350, 0.000], // Lane 5 - Orange (Guitar bg)
+        [0.550, 0.000, 0.000], // Lane 6 - Red    (Drum bg)
     ];
     pub const WALL_DARK:  [f32; 3] = [0.08, 0.01, 0.01]; // dark red-black
     pub const WALL_RING:  [f32; 3] = [1.0,  0.2,  0.2 ]; // red glow ring
