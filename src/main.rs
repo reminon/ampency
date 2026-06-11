@@ -3,6 +3,7 @@ mod shader;
 mod tunnel;
 mod themes;
 mod rnd_mesh;
+mod chart;
 
 use sdl2::event::Event;
 use sdl2::keyboard::Keycode;
@@ -35,10 +36,13 @@ out vec4 FragColor;
 uniform float fogStart;
 uniform float fogEnd;
 uniform vec3 fogColor;
+uniform vec3 tint;
+uniform float tintStrength;
 
 void main() {
     float fogFactor = clamp((fogEnd - vDepth) / (fogEnd - fogStart), 0.0, 1.0);
-    vec3 color = mix(fogColor, vColor, fogFactor);
+    vec3 color = mix(vColor, tint, tintStrength);
+    color = mix(fogColor, color, fogFactor);
     FragColor = vec4(color, 1.0);
 }
 "#;
@@ -70,6 +74,16 @@ fn main() {
 
     let shader = shader::Shader::new(VERT_SRC, FRAG_SRC);
 
+    // Load song chart
+    let song_chart = chart::Chart::from_midi(
+        "extracted/amplitude/songs/bowie/bowie_r.mid");
+    if let Some(ref c) = song_chart {
+        println!("Loaded chart: {} ({:.0} BPM)", c.song_name, c.bpm);
+        for t in &c.tracks {
+            println!("  {} - {} gems", t.instrument, t.gems.len());
+        }
+    }
+
     // Load grid4.mesh (single lane quad, tiled to form the track)
     let grid_mesh = std::fs::read("assets/meshes/grid4.mesh.bin")
         .ok()
@@ -78,6 +92,14 @@ fn main() {
         println!("Loaded {}: {} verts, {} indices",
             m.name, m.vertices.len(), m.indices.len());
     }
+
+    // Load gem meshes
+    let gem_neut = std::fs::read("assets/meshes/gem_neut.mesh.bin")
+        .ok().and_then(|b| rnd_mesh::RndMesh::from_block(&b));
+    let gem_auto = std::fs::read("assets/meshes/gem_auto.mesh.bin")
+        .ok().and_then(|b| rnd_mesh::RndMesh::from_block(&b));
+    let streakarrow = std::fs::read("assets/meshes/streakarrow.mesh.bin")
+        .ok().and_then(|b| rnd_mesh::RndMesh::from_block(&b));
     let mut tunnel = tunnel::Tunnel::new();
 
     // Camera: behind ship on lane 3 (green, center), looking forward
@@ -146,7 +168,36 @@ fn main() {
         shader.set_mat4("projection", &projection);
         tunnel.draw();
 
-        // TODO: gem mesh rendering goes here
+        // Draw test gems along each lane
+        shader.set_float("tintStrength", 0.8);
+        if let Some(ref gem) = gem_neut {
+            for lane in 0..6usize {
+                let lx = lane_centers[lane];
+                let [r,g,b] = tunnel::palette::LANES[lane];
+                shader.set_vec3("tint", r, g, b);
+                // Place gems every 2 units along Z
+                for gi in 0..20i32 {
+                    let gz = -(gi as f32 * 2.0) - 2.0 + scroll_z.rem_euclid(2.0);
+                    if gz < -50.0 || gz > 2.0 { continue; }
+                    let gem_model = Matrix4::new_translation(
+                        &Vector3::new(lx, 0.08, gz));
+                    shader.set_mat4("model", &gem_model);
+                    gem.draw();
+                }
+            }
+        }
+        shader.set_float("tintStrength", 0.0);
+
+        // Draw streakarrow above lane 3 (active lane indicator)
+        if let Some(ref arrow) = streakarrow {
+            shader.set_vec3("tint", 0.1, 1.0, 0.2);
+            shader.set_float("tintStrength", 0.9);
+            let arrow_model = Matrix4::new_translation(
+                &Vector3::new(cam_x, 0.3, -3.0));
+            shader.set_mat4("model", &arrow_model);
+            arrow.draw();
+            shader.set_float("tintStrength", 0.0);
+        }
 
         window.gl_swap_window();
     }
