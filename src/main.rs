@@ -2,6 +2,7 @@
 mod shader;
 mod tunnel;
 mod themes;
+mod rnd_mesh;
 
 use sdl2::event::Event;
 use sdl2::keyboard::Keycode;
@@ -68,6 +69,15 @@ fn main() {
     }
 
     let shader = shader::Shader::new(VERT_SRC, FRAG_SRC);
+
+    // Load grid4.mesh (single lane quad, tiled to form the track)
+    let grid_mesh = std::fs::read("assets/meshes/grid4.mesh.bin")
+        .ok()
+        .and_then(|b| rnd_mesh::RndMesh::from_block(&b));
+    if let Some(ref m) = grid_mesh {
+        println!("Loaded {}: {} verts, {} indices",
+            m.name, m.vertices.len(), m.indices.len());
+    }
     let mut tunnel = tunnel::Tunnel::new();
 
     // Camera: behind ship on lane 3 (green, center), looking forward
@@ -135,6 +145,8 @@ fn main() {
         shader.set_vec3("fogColor", 0.02, 0.02, 0.06);
         shader.set_mat4("projection", &projection);
         tunnel.draw();
+
+        // TODO: gem mesh rendering goes here
 
         window.gl_swap_window();
     }

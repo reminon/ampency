@@ -5,11 +5,11 @@ use gl;
 use std::f32::consts::PI;
 
 const TUNNEL_SEGMENTS: usize = 48;
-const TUNNEL_LENGTH: f32 = 80.0;
-const TUNNEL_RADIUS: f32 = 4.0;
+const TUNNEL_LENGTH: f32 = 80.0;  // approximate; real path from arena cam path.tnm
+const TUNNEL_RADIUS: f32 = 4.0;  // from fake panel mesh extents
 const SIDES: usize = 32; // circular approximation
 const LANE_COUNT: usize = 6;
-const LANE_WIDTH: f32 = 0.60;
+const LANE_WIDTH: f32 = 0.60;  // confirmed from grid4.mesh vertices (x: -0.3 to 0.3)
 const LANE_DIVIDER: f32 = 0.04;
 const TRACK_Y: f32 = 0.0;
 const RING_COUNT: usize = 50;
