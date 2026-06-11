@@ -45,3 +45,8 @@ tools/ArkExtract/obj/
 
 # Temp
 ee_ext/
+songs/*.flac
+songs/*.mid
+songs/*.mp3
+songs/*.ogg
+songs/*.wav
