@@ -154,6 +154,57 @@ impl RndMesh {
         Some(RndMesh { name, material, vertices, indices, vao, vbo, ibo })
     }
 
+    fn find_vertex_block(block: &[u8]) -> Option<(usize, usize)> {
+        for i in (150..block.len().saturating_sub(60)).step_by(1) {
+            if i + 4 > block.len() { break; }
+            let count = u32::from_le_bytes(block[i..i+4].try_into().ok()?) as usize;
+            if count < 3 || count > 5000 { continue; }
+            let vs = i + 4;
+            if vs + 56 > block.len() { continue; }
+            let vals: Vec<f32> = (0..7)
+                .map(|j| f32::from_le_bytes(block[vs+j*4..vs+j*4+4].try_into().unwrap_or([0;4])))
+                .collect();
+            let (px,py,pz) = (vals[0],vals[1],vals[2]);
+            let (nx,ny,nz) = (vals[4],vals[5],vals[6]);
+            let nlen = (nx*nx+ny*ny+nz*nz).sqrt();
+            if px.abs()<500.0 && py.abs()<500.0 && pz.abs()<500.0 && (0.5..1.5).contains(&nlen) {
+                // Verify last vertex also looks valid
+                let last_vs = vs + (count-1)*56;
+                if last_vs + 56 <= block.len() {
+                    let lv: Vec<f32> = (0..7)
+                        .map(|j| f32::from_le_bytes(block[last_vs+j*4..last_vs+j*4+4].try_into().unwrap_or([0;4])))
+                        .collect();
+                    let ln = (lv[4]*lv[4]+lv[5]*lv[5]+lv[6]*lv[6]).sqrt();
+                    if lv[0].abs()<500.0 && lv[1].abs()<500.0 && (0.5..1.5).contains(&ln) {
+                        return Some((i+4, count));
+                    }
+                }
+            }
+        }
+        None
+    }
+
+    fn parse_names(header: &[u8]) -> (String, String) {
+        let mut name = String::from("unknown");
+        let mut material = String::from("unknown");
+        let mut i = 0;
+        while i + 4 < header.len() {
+            let slen = u32::from_le_bytes(header[i..i+4].try_into().unwrap_or([0;4])) as usize;
+            if slen >= 3 && slen <= 60 && i+4+slen <= header.len() {
+                let bytes = &header[i+4..i+4+slen];
+                if bytes.iter().all(|&b| b >= 32 && b < 127) {
+                    let s = String::from_utf8_lossy(bytes).to_string();
+                    if s.ends_with(".mesh") { name = s; }
+                    else if s.ends_with(".mat") || s.contains(" mat") { material = s; }
+                    i += 4 + slen;
+                    continue;
+                }
+            }
+            i += 1;
+        }
+        (name, material)
+    }
+
     pub fn draw(&self) {
         unsafe {
             gl::BindVertexArray(self.vao);
