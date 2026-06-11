@@ -67,7 +67,7 @@ fn main() {
 
     let projection = Perspective3::new(
         1280.0 / 720.0,
-        75.0f32.to_radians(),
+        45.0f32.to_radians(),
         0.1,
         200.0,
     ).to_homogeneous();
