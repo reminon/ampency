@@ -45,7 +45,7 @@ INSTRUMENTS = [
 ]
 
 DIFF_OFFSET   = {'easy': 0, 'medium': 12, 'hard': 24, 'expert': 36}
-DIFF_KEEP     = {'easy': 0.25, 'medium': 0.45, 'hard': 0.70, 'expert': 1.0}
+DIFF_KEEP     = {'easy': 0.12, 'medium': 0.25, 'hard': 0.45, 'expert': 0.44}
 DIFF_MIN_GAP  = {'easy': 1.0,  'medium': 0.5,  'hard': 0.25, 'expert': 0.125}
 
 SECTION_START = 96
@@ -190,7 +190,7 @@ def detect_lane_unlocks(rms_times, rms, beat_times, num_lanes=5):
     return unlock_beats
 
 
-def generate_midi(tempo, beat_times, onsets, duration, rms_times, rms, output):
+def generate_midi(tempo, beat_times, onsets, duration, rms_times, rms, output, beat_offset=0.0):
     tpb = 480
     tempo_us = int(60_000_000 / tempo)
     total_beats = time_to_beat(duration, beat_times)
@@ -221,9 +221,9 @@ def generate_midi(tempo, beat_times, onsets, duration, rms_times, rms, output):
         events = []  # (tick, note, on, velocity)
 
         # Section markers every 16 beats
-        beat = 0.0
+        beat = max(0.0, beat_offset)
         phase = 0
-        while beat < total_beats:
+        while beat < total_beats + beat_offset:
             marker = [SECTION_START, SECTION_MID, SECTION_END][phase % 3]
             tick = int(beat * tpb)
             events.append((tick, marker, True, 100))
@@ -249,7 +249,7 @@ def generate_midi(tempo, beat_times, onsets, duration, rms_times, rms, output):
 
             for i, gem_beat in enumerate(gems):
                 note = offset + (i % 12)
-                tick = int(gem_beat * tpb)
+                tick = int((gem_beat + beat_offset) * tpb)
                 dur  = max(tpb // 8, int(tpb * 0.1))
                 events.append((tick,       note, True,  100))
                 events.append((tick + dur, note, False, 0))
@@ -298,6 +298,10 @@ def main():
     ap.add_argument('--output', '-o', default=None)
     ap.add_argument('--bpm', type=float, default=None,
                     help='Override BPM detection')
+    ap.add_argument('--start-offset', type=float, default=0.0, dest='start_offset',
+                    help='Shift beat times by this many seconds to align with chart')
+    ap.add_argument('--intro-beats', type=float, default=16.0, dest='intro_beats',
+                    help='Number of beats before first gem (default: 16, matches Amplitude)')
     args = ap.parse_args()
 
     if not os.path.exists(args.audio):
@@ -309,15 +313,30 @@ def main():
 
     tempo, beat_times, onsets, duration, rms_times, rms = analyze_audio(args.audio)
 
+    if args.start_offset != 0.0:
+        print(f"Applying start offset: {args.start_offset:+.3f}s")
+        # Shift beat times
+        beat_times = beat_times + args.start_offset
+        beat_times = beat_times[beat_times >= 0]
+        # Shift all onset times
+        for name in onsets:
+            onsets[name] = [(t + args.start_offset, s) for t, s in onsets[name]
+                           if t + args.start_offset >= 0]
+        rms_times = rms_times + args.start_offset
+
     if args.bpm:
         print(f"BPM override: {args.bpm}")
         tempo = args.bpm
         # Recompute beat_times with fixed BPM
         beat_times = np.arange(0, duration, 60.0/tempo)
 
+    # Compute beat offset: how many beats to add to align audio with chart
+    # Positive = audio starts before chart beat 0
+    beat_offset = args.start_offset * tempo / 60.0 + args.intro_beats
+    print(f"Beat offset: {beat_offset:.2f} beats (includes {args.intro_beats} intro beats)")
     print(f"\nGenerating chart for all difficulties...")
     generate_midi(tempo, beat_times, onsets, duration,
-                  rms_times, rms, args.output)
+                  rms_times, rms, args.output, beat_offset=beat_offset)
 
 
 if __name__ == '__main__':
