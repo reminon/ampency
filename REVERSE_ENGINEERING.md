@@ -528,3 +528,172 @@ Object name strings are stored in a packed string table in EE RAM (found around
 `0x003fb3f8` for tunnel objects). The object registry binary tree root is at
 `*(0x0043c79c)`. Object data blocks are scattered in the heap and reference the
 string table by content, not pointer.
+
+---
+
+## Complete Mesh Binary Layout (grid4.mesh, 474 bytes)
+
+```
+[0x00] u32 = 14          header field (flags/type?)
+[0x04] u32 = 5           header field
+[0x08] f32[16]           4x4 transform matrix (row-major, identity for grid4)
+[0x48] u32 = 0           padding
+[0x4c] u32 = 0           padding
+[0x50] u32 = 0           padding  
+[0x54] u32 = 0           padding
+[0x58] u32 = 0           padding
+[0x5c] u32 = 0           padding
+[0x60] u32 = 0           padding
+[0x64] u32 = 0           padding
+[0x68] u32 = 0           padding
+[0x6c] u32 = 0           padding
+[0x70] u32 = 0           padding
+[0x74] u32 = 0           padding
+[0x78] u32 = 0           padding
+[0x7c] u32 = 0           padding
+[0x80] u32 = 1           (unknown — render flags?)
+[0x84] u32 = 0           padding
+[0x88] u32 = 0           padding
+[0x8c] u32 = 0           padding
+[0x90] u32 = 1           (unknown)
+[0x94] u32 mat_name_len
+[0x98] u8[mat_name_len]  material name (e.g. "gridline mat")
+[...]  u32 mesh_name_len
+[...]  u8[mesh_name_len]  mesh name (e.g. "grid4.mesh") ×2
+[...]  u32 = 0 ×5        padding/alignment
+[...]  u32 vertex_count
+[...]  f32[vertex_count × 14]  vertex data (56 bytes each, see vertex format)
+[...]  u32 face_count
+[...]  u16[face_count × 3]     triangle indices
+[...]  u32 = 0xDEADDEAD        sentinel
+```
+
+### grid4.mesh Geometry
+
+4 vertices, 2 triangles forming a single quad (one lane segment):
+```
+Indices: (0,2,3), (0,1,2)
+
+v0: pos(-0.3,  0.0,  0.03)  normal(0,0,-1)  rgb(1,1,1)  a=0.8  uv(0,0)
+v1: pos(-0.3,  0.0, -0.03)  normal(0,0,-1)  rgb(1,1,1)  a=0.8  uv(0,1)
+v2: pos( 0.3,  0.0, -0.03)  normal(0,0,-1)  rgb(1,1,1)  a=0.8  uv(1,1)
+v3: pos( 0.3,  0.0,  0.03)  normal(0,0,-1)  rgb(1,1,1)  a=0.8  uv(1,0)
+```
+
+Lane width = 0.6 units (x: -0.3 to 0.3)
+Lane depth = 0.06 units (z: -0.03 to 0.03) — single segment, tiled along tunnel
+
+### Important Dimensions
+
+| Parameter | Value | Source |
+|-----------|-------|--------|
+| Lane width | 0.6 units | grid4.mesh vertices |
+| Lane count | 6 | tunnel_new.rnd manifest |
+| Total track width | 3.8 units | 6×0.6 + 5×0.04 dividers |
+| Tunnel wall radius | ~4.0 units | fake panel mesh extents |
+| Track Y position | 0.0 | grid4.mesh Y=0 |
+| Tunnel center Y | -0.611 | computed from wall mesh |
+| Camera Y | -0.2 | tnl cam1 transform matrix |
+| Camera FOV | 45° (π/4) | Cam object data |
+| Camera far plane | 1000.0 | Cam object data |
+| Fog start | 20.0 | estimated |
+| Fog end | 56.0 | tunnel solo.env |
+| Ambient color | (0.2, 0.2, 0.2) | tunnel solo.env |
+
+---
+
+## Scene Graph (from tnl.view)
+
+```
+tnl.view (master)
+├── realtime.view          — live gameplay objects
+├── panel intro 1-4.mnm    — lane intro animations
+├── streakarrow.view       — lane switch arrow indicator
+├── seeker_g/p/r/y/s.mnm  — ship model per lane color
+├── panel ckpt.mnm         — checkpoint panels
+├── fake panel.mesh        — stage clear plasma fire (lane 1)
+├── fake panel1-5.mesh     — stage clear plasma fire (lanes 2-6)
+├── fake panel pass 1/2    — two-pass additive blend for fire
+├── tunnel track color.lit — dynamic track lighting
+├── tunnel rotating.lit    — rotating tunnel light
+├── tunnel light1.lit      — static tunnel light
+├── fire0/1.view           — fire particle systems
+├── fire fs0-5.view        — per-lane fire fullscreen effects
+├── tnl cam1               — camera reference
+├── tnl opaque             — opaque render pass
+│   └── gem_free/neut/slow/mult/bump/auto/crip meshes
+└── tnl transparent        — transparent/additive render pass
+    ├── gem_miss mesh
+    ├── gem_bass/drum/guitar/fx/synth/vox/flash particle systems
+    ├── sabre_g/r/y/p.str  — laser beam streak effects
+    └── gem_glow 0-3 particle systems
+```
+
+### Render Passes
+
+The game uses a two-pass rendering system:
+- **Opaque pass** (`tnl opaque`): Standard depth-tested geometry — gem meshes
+- **Transparent pass** (`tnl transparent`): Additive/alpha-blended effects — particles, glows, streaks
+
+---
+
+## Instrument Colors (from freq2_config.txt.bin)
+
+### Lane Colors (inst_bg_color — panel background)
+
+| Instrument | Lane Color | RGB |
+|-----------|-----------|-----|
+| Drum | Red | 0.550, 0.000, 0.000 |
+| Bass | Blue | 0.000, 0.200, 0.650 |
+| Vocal | Green | 0.000, 0.550, 0.000 |
+| Synth | Yellow | 0.700, 0.600, 0.000 |
+| Guitar | Orange | 0.800, 0.350, 0.000 |
+
+### Instrument UI Colors (inst_color — foreground/text)
+
+| Instrument | Color | RGB |
+|-----------|-------|-----|
+| Drum | Red | 0.700, 0.000, 0.000 |
+| Bass | Blue | 0.100, 0.650, 1.000 (note: bg has 0.000, 0.100, 0.650) |
+| Synth | Green | 0.000, 0.900, 0.000 |
+| Guitar | Dark Green | 0.000, 0.500, 0.000 |
+| Vocal | Green | 0.000, 0.700, 0.000 |
+
+### Track Color Config Keys
+
+| Key | Dim Color | Bright Color |
+|-----|-----------|-------------|
+| track_color_r (Red) | 0.500, 0.050, 0.050 | 0.800, 0.150, 0.150 |
+| track_color_p (Purple) | 0.450, 0.100, 0.470 | 0.800, 0.250, 0.900 |
+| track_color_y (Yellow) | 0.450, 0.450, 0.020 | 0.900, 0.900, 0.100 |
+| track_color_neutral | 0.200, 0.200, 0.400 | — |
+| track_color_g_streak | — | 0.150, 0.750, 0.150 |
+
+---
+
+## Gameplay Notes
+
+### Lane System
+- Songs start with 2-3 lanes active (song-defined in freq2_config)
+- Clearing a lane unlocks adjacent locked lanes
+- Lane layout is dynamic — new lanes appear as song progresses
+- Lane positions shift to stay centered as count changes
+
+### Stage Clear Animation
+- On lane clear: fake panel mesh becomes visible over the lane
+- Plasma fire effect (lane color) via two-pass additive blending
+- Effect scrolls away from player along Z axis (down the tunnel)
+- Rails remain visible during clear — track returns after set duration
+- Driven by `stageClear.matAnim` objects triggered in DTB scripts
+
+### Streakarrow
+- `streakarrow.mesh` + `streakarrow.tnm` — the large arrow indicator
+- Appears above the nearest capturable lane
+- Points toward the target lane in the player's travel direction
+- Not a lane-switch trail — it's a "go here next" indicator
+
+### DTB Trigger System
+- Per-song trigger scripts: `triggers_p1.txt.bin` through `triggers_p4.txt.bin`
+- Beat-triggered events: `animate`, `set_mat`, `set_anim`, `show`, `hide`
+- Conditions: `note`, `gem_pos`, `game_state`, `path_exists`, `path_unlocked`
+- Arena phases: each `.txt.bin` corresponds to one song in the arena
