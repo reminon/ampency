@@ -428,3 +428,103 @@ key stored at the start of the file. Amplitude's `.txt.bin` files appear to use
 an unencrypted variant — the source filename is visible in plaintext immediately
 after the version byte, and known strings (`beat`, `conditions`, `actions`,
 `animate`) are readable without decryption.
+
+---
+
+## Mesh Object Binary Format
+
+Cracked via PINE memory inspection and static analysis of decompressed RND files.
+
+### Cam Object Struct
+
+The `Cam` object stores projection parameters (position comes from a linked
+TransAnim, not the Cam itself):
+
+```
++0x00  f32[4]   padding / flags (zeros)
++0x10  f32[3]   RGB color (0.7, 0.7, 0.7) — fog or ambient
++0x1c  u32      reference pointer
++0x20  f32      FOV horizontal = 0.7854 (π/4 = 45°)
++0x24  f32      FOV vertical   = 0.7854
++0x28  f32      far plane  = 1000.0
++0x2c  f32      near plane = 1.0
++0x30  ...      zeros
++0x38  u32      0xDEADDEAD sentinel
+```
+
+**Confirmed camera values for Amplitude tunnel:**
+- FOV = 45° (π/4 radians)
+- Near plane = 1.0
+- Far plane = 1000.0
+
+### Mesh Object Struct
+
+```
+[transform]  4×4 identity matrix (64 bytes) — f32, row-major
+             1 0 0 0 / 0 1 0 0 / 0 0 1 0 / 0 0 0 1
+[material]   u32 len + material name string (e.g. "grid line mat")
+[mesh name]  u32 len + mesh name string (e.g. "grid4.mesh") ×2
+             (appears twice: once as object name, once as material ref)
+[padding]    alignment bytes
+u32          vertex_count
+[vertices]   vertex_count × 56 bytes
+u32          face_index_count
+[indices]    face_index_count × u32
+u32          0xDEADDEAD sentinel
+```
+
+**Note:** After the variable-length name strings, vertex data is NOT 4-byte
+aligned. A 10-byte name like "grid4.mesh" shifts subsequent data to mod-4 = 2
+alignment. Parsers must track byte position exactly, not assume alignment.
+
+#### Vertex Format (56 bytes = 14 × f32)
+
+```
++0x00  f32[3]   position   (x, y, z)
++0x0c  f32      padding (0.0)
++0x10  f32[3]   normal     (nx, ny, nz)
++0x1c  f32      padding (0.0)
++0x20  f32[3]   color RGB  (r, g, b)
++0x2c  f32      alpha      (a)
++0x30  f32[2]   UV         (u, v)
+```
+
+Example from `grid4.mesh` (one lane quad, 0.6 units wide):
+```
+v0: pos(-0.3, 0.0,  0.03)  normal(0,0,-1)  rgb(1,1,1)  a=0.8  uv(0,0)
+v1: pos(-0.3, 0.0, -0.03)  normal(0,0,-1)  rgb(1,1,1)  a=0.8  uv(0,1)
+v2: pos( 0.3, 0.0, -0.03)  normal(0,0,-1)  rgb(1,1,1)  a=0.8  uv(1,1)
+v3: pos( 0.3, 0.0,  0.03)  normal(0,0,-1)  rgb(1,1,1)  a=0.8  uv(1,0)
+```
+
+Indices follow as u32 values (e.g. `0,1,2, 0,2,3` for two triangles forming
+the quad), terminated by the `0xDEADDEAD` sentinel.
+
+### PINE Memory Inspection Method
+
+PCSX2 2.7+ exposes a PINE IPC server (Settings → Advanced → Enable PINE,
+default port 28011). On Linux it's a Unix domain socket at
+`/run/user/<uid>/pcsx2.sock`.
+
+PINE wire format (little-endian):
+```
+Request:  u32 total_length (incl. self) | u8 opcode | [args]
+Response: u32 total_length | u8 status (0=ok) | [data]
+
+Opcodes:  MsgRead8=0, MsgRead16=1, MsgRead32=2, MsgRead64=3,
+          MsgWrite8=4 ... MsgWrite64=7
+```
+
+Read32 example:
+```python
+payload = struct.pack('<B', 2) + struct.pack('<I', addr)
+msg = struct.pack('<I', len(payload) + 4) + payload
+sock.sendall(msg)
+resp = sock.recv(64)
+value = struct.unpack_from('<I', resp, 5)[0]  # if resp[4] == 0
+```
+
+Object name strings are stored in a packed string table in EE RAM (found around
+`0x003fb3f8` for tunnel objects). The object registry binary tree root is at
+`*(0x0043c79c)`. Object data blocks are scattered in the heap and reference the
+string table by content, not pointer.
