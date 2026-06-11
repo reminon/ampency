@@ -48,6 +48,13 @@ impl Shader {
         }
     }
 
+    pub fn set_float(&self, name: &str, value: f32) {
+        unsafe {
+            let cname = std::ffi::CString::new(name).unwrap();
+            gl::Uniform1f(gl::GetUniformLocation(self.id, cname.as_ptr()), value);
+        }
+    }
+
     pub fn set_vec3(&self, name: &str, x: f32, y: f32, z: f32) {
         unsafe {
             let c_name = CString::new(name).unwrap();

@@ -13,21 +13,32 @@ const VERT_SRC: &str = r#"
 layout (location = 0) in vec3 aPos;
 layout (location = 1) in vec3 aColor;
 out vec3 vColor;
+out float vDepth;
 uniform mat4 model;
 uniform mat4 view;
 uniform mat4 projection;
 void main() {
-    gl_Position = projection * view * model * vec4(aPos, 1.0);
+    vec4 viewPos = view * model * vec4(aPos, 1.0);
+    gl_Position = projection * viewPos;
     vColor = aColor;
+    vDepth = -viewPos.z;
 }
 "#;
 
 const FRAG_SRC: &str = r#"
 #version 330 core
 in vec3 vColor;
+in float vDepth;
 out vec4 FragColor;
+
+uniform float fogStart;
+uniform float fogEnd;
+uniform vec3 fogColor;
+
 void main() {
-    FragColor = vec4(vColor, 1.0);
+    float fogFactor = clamp((fogEnd - vDepth) / (fogEnd - fogStart), 0.0, 1.0);
+    vec3 color = mix(fogColor, vColor, fogFactor);
+    FragColor = vec4(color, 1.0);
 }
 "#;
 
@@ -119,6 +130,9 @@ fn main() {
         shader.use_program();
         shader.set_mat4("model", &model);
         shader.set_mat4("view", &view_dyn);
+        shader.set_float("fogStart", 20.0);
+        shader.set_float("fogEnd", 56.0);
+        shader.set_vec3("fogColor", 0.02, 0.02, 0.06);
         shader.set_mat4("projection", &projection);
         tunnel.draw();
 
