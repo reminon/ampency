@@ -74,6 +74,9 @@ fn main() {
 
     let mut event_pump = sdl_context.event_pump().unwrap();
     let mut last_ticks = sdl_context.timer().unwrap().ticks();
+    let mut active_lane: i32 = 2; // start on lane 3 (center-left)
+    let mut cam_x: f32 = -0.320; // lane 3 center X
+    let lane_centers = [-1.600f32, -0.960, -0.320, 0.320, 0.960, 1.600];
 
     'running: loop {
         let timer = sdl_context.timer().unwrap();
@@ -83,6 +86,12 @@ fn main() {
 
         for event in event_pump.poll_iter() {
             match event {
+                Event::KeyDown { keycode: Some(Keycode::Left), .. } => {
+                    active_lane = (active_lane - 1).max(0);
+                }
+                Event::KeyDown { keycode: Some(Keycode::Right), .. } => {
+                    active_lane = (active_lane + 1).min(5);
+                }
                 Event::Quit { .. }
                 | Event::KeyDown { keycode: Some(Keycode::Escape), .. } => {
                     break 'running;
@@ -95,13 +104,21 @@ fn main() {
         let scroll_z = tunnel.scroll_offset;
         let model = Matrix4::new_translation(&Vector3::new(0.0, 0.0, scroll_z));
 
+        // Smooth camera follow
+        let target_x = lane_centers[active_lane as usize];
+        cam_x += (target_x - cam_x) * (dt * 8.0).min(1.0);
+
         unsafe {
             gl::Clear(gl::COLOR_BUFFER_BIT | gl::DEPTH_BUFFER_BIT);
         }
 
+        let eye_dyn    = Point3::new(cam_x, -0.2f32, 1.5);
+        let target_dyn = Point3::new(cam_x, 3.272f32, -18.196);
+        let view_dyn   = Matrix4::look_at_rh(&eye_dyn, &target_dyn, &up);
+
         shader.use_program();
         shader.set_mat4("model", &model);
-        shader.set_mat4("view", &view);
+        shader.set_mat4("view", &view_dyn);
         shader.set_mat4("projection", &projection);
         tunnel.draw();
 
